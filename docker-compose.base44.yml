@@ -1,0 +1,141 @@
+# LocalLoop — Base44 sandbox stack.
+# Runs the repo's own source (bind-mounted) through live-reload dev servers.
+# Web entry point: host port 3000. API: host port 8000 (also webhooks).
+name: localloop
+
+services:
+  db:
+    image: postgis/postgis:16-3.4
+    restart: on-failure
+    environment:
+      POSTGRES_USER: localloop
+      POSTGRES_PASSWORD: localloop_dev_pw
+      POSTGRES_DB: localloop
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U localloop -d localloop"]
+      interval: 3s
+      timeout: 5s
+      retries: 30
+    labels:
+      base44.project: "LocalLoop DB"
+      base44.kind: "infra"
+
+  # One-shot: applies db/migrations/*.sql then db/seeds/*.sql, then exits.
+  migrate:
+    image: postgis/postgis:16-3.4
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - ./db:/db:ro
+    environment:
+      PGHOST: db
+      PGUSER: localloop
+      PGPASSWORD: localloop_dev_pw
+      PGDATABASE: localloop
+      APP_DB_USER: localloop_app
+      APP_DB_PASSWORD: localloop_app_pw
+    entrypoint: ["sh", "/db/migrate.sh"]
+
+  api:
+    image: node:22-alpine
+    restart: on-failure
+    working_dir: /app
+    volumes:
+      - ./api:/app
+      - api_node_modules:/app/node_modules
+      - api_uploads:/app/uploads
+    env_file:
+      - ./.env.base44-defaults
+      - path: /run/base44/app.env
+        required: false
+    environment:
+      NODE_ENV: development
+      PORT: "8000"
+      # Local infrastructure credentials we generate ourselves (not user secrets).
+      DATABASE_URL: postgres://localloop:localloop_dev_pw@db:5432/localloop
+      APP_DATABASE_URL: postgres://localloop_app:localloop_app_pw@db:5432/localloop
+      PUBLIC_WEB_ORIGIN: https://3000-${BASE44_PUBLIC_HOST_SUFFIX}
+      BASE44_PREVIEW_MODE: ${BASE44_PREVIEW_MODE}
+    command: ["sh", "-ec", "npm ci --no-audit --no-fund && exec npm run dev"]
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:8000/api/health || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 90s
+    labels:
+      base44.project: "LocalLoop API"
+      base44.kind: "api"
+      base44.port: "8000"
+      base44.docs: "/docs"
+
+  # Scheduled jobs: expire drops, drop pushes to followers, payout reconciliation.
+  worker:
+    image: node:22-alpine
+    restart: on-failure
+    working_dir: /app
+    volumes:
+      - ./api:/app
+      - api_node_modules:/app/node_modules
+      - api_uploads:/app/uploads
+    env_file:
+      - ./.env.base44-defaults
+      - path: /run/base44/app.env
+        required: false
+    environment:
+      NODE_ENV: development
+      DATABASE_URL: postgres://localloop:localloop_dev_pw@db:5432/localloop
+      APP_DATABASE_URL: postgres://localloop_app:localloop_app_pw@db:5432/localloop
+      BASE44_PREVIEW_MODE: ${BASE44_PREVIEW_MODE}
+    command: ["sh", "-ec", "exec npm run worker"]
+    depends_on:
+      api:
+        condition: service_healthy
+    labels:
+      base44.project: "LocalLoop Jobs"
+      base44.kind: "worker"
+
+  web:
+    image: node:22-alpine
+    restart: on-failure
+    working_dir: /app
+    volumes:
+      - ./web:/app
+      - web_node_modules:/app/node_modules
+    environment:
+      - VITE_API_PROXY_TARGET=http://api:8000
+      # Vite >= 6.1 appends this to server.allowedHosts (platform-provided).
+      - __VITE_ADDITIONAL_SERVER_ALLOWED_HOSTS
+      - BASE44_PREVIEW_MODE
+    command: ["sh", "-ec", "npm ci --no-audit --no-fund && exec npm run dev"]
+    ports:
+      - "3000:3000"
+    depends_on:
+      api:
+        condition: service_started
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:3000/ || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 90s
+    labels:
+      base44.project: "LocalLoop"
+      base44.kind: "web"
+      base44.port: "3000"
+
+volumes:
+  pgdata:
+  api_node_modules:
+  web_node_modules:
+  api_uploads:

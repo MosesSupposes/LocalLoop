@@ -1,0 +1,165 @@
+@import 'tailwindcss';
+
+/* ---------------------------------------------------------------------------
+   SoCal Neon Market design tokens. Components only ever reference these
+   semantic variables — never a raw color.
+--------------------------------------------------------------------------- */
+:root {
+  --background: oklch(0.16 0.02 160);
+  --surface: oklch(0.21 0.025 160);
+  --surface-raised: oklch(0.26 0.03 160);
+  --foreground: oklch(0.97 0.01 100);
+  --muted-foreground: oklch(0.72 0.03 140);
+  --primary: oklch(0.86 0.22 145);
+  --primary-foreground: oklch(0.18 0.03 160);
+  --accent-sunset: oklch(0.75 0.19 50);
+  --accent-pink: oklch(0.72 0.2 0);
+  --accent-sky: oklch(0.8 0.12 220);
+  --success: oklch(0.8 0.17 150);
+  --warning: oklch(0.83 0.16 85);
+  --destructive: oklch(0.68 0.2 25);
+  --border: oklch(1 0 0 / 0.08);
+  --glow-primary: 0 0 24px oklch(0.86 0.22 145 / 0.45);
+  --glow-sunset: 0 0 28px oklch(0.75 0.19 50 / 0.4);
+  --gradient-sunset: linear-gradient(135deg, var(--accent-sunset), var(--accent-pink));
+  --gradient-hero: radial-gradient(120% 90% at 50% -10%, oklch(0.3 0.08 150) 0%, var(--background) 62%);
+  color-scheme: dark;
+}
+
+:root[data-theme='light'] {
+  --background: oklch(0.97 0.02 95);
+  --surface: oklch(0.99 0.012 95);
+  --surface-raised: oklch(1 0 0);
+  --foreground: oklch(0.24 0.03 160);
+  --muted-foreground: oklch(0.46 0.03 150);
+  --primary: oklch(0.6 0.16 150);
+  --primary-foreground: oklch(0.99 0.01 100);
+  --accent-sunset: oklch(0.63 0.17 45);
+  --accent-pink: oklch(0.6 0.19 5);
+  --accent-sky: oklch(0.56 0.13 235);
+  --success: oklch(0.55 0.14 150);
+  --warning: oklch(0.6 0.14 75);
+  --destructive: oklch(0.55 0.19 25);
+  --border: oklch(0.24 0.03 160 / 0.14);
+  color-scheme: light;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-surface: var(--surface);
+  --color-surface-raised: var(--surface-raised);
+  --color-foreground: var(--foreground);
+  --color-muted: var(--muted-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-sunset: var(--accent-sunset);
+  --color-pink: var(--accent-pink);
+  --color-sky: var(--accent-sky);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-destructive: var(--destructive);
+  --color-line: var(--border);
+
+  --radius-card: 20px;
+  --radius-sheet: 28px;
+
+  --font-display: 'Syne', 'Avenir Next', 'Trebuchet MS', system-ui, sans-serif;
+  --font-sans: 'Plus Jakarta Sans', 'Manrope', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: 'JetBrains Mono', 'SFMono-Regular', ui-monospace, 'Menlo', monospace;
+}
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+  body {
+    margin: 0;
+    min-height: 100dvh;
+    background-color: var(--background);
+    background-image: var(--gradient-hero);
+    background-attachment: fixed;
+    color: var(--foreground);
+    font-family: var(--font-sans);
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+  }
+  h1,
+  h2,
+  h3 {
+    font-family: var(--font-display);
+    letter-spacing: -0.02em;
+    line-height: 1.1;
+  }
+  *:focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
+  }
+  ::selection {
+    background: var(--accent-pink);
+    color: var(--primary-foreground);
+  }
+}
+
+@layer components {
+  .surface-card {
+    background-color: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-card);
+  }
+  .surface-raised {
+    background-color: var(--surface-raised);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-card);
+  }
+  .glow-primary {
+    box-shadow: var(--glow-primary);
+  }
+  .glow-sunset {
+    box-shadow: var(--glow-sunset);
+  }
+  .text-gradient-sunset {
+    background-image: var(--gradient-sunset);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+  .pin {
+    animation: pin-pulse 2.2s ease-in-out infinite;
+  }
+  .skeleton {
+    background: linear-gradient(90deg, var(--surface) 25%, var(--surface-raised) 50%, var(--surface) 75%);
+    background-size: 200% 100%;
+    animation: skeleton-shimmer 1.4s linear infinite;
+  }
+}
+
+@keyframes pin-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 oklch(0.75 0.19 50 / 0.5);
+  }
+  50% {
+    transform: scale(1.06);
+    box-shadow: 0 0 0 10px oklch(0.75 0.19 50 / 0);
+  }
+}
+
+@keyframes skeleton-shimmer {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -200% 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

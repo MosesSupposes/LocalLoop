@@ -175,3 +175,26 @@ SEO: SSR merchant pages with LocalBusiness/Menu schema, per-neighborhood landing
  CI is green, the preview deploy works, Sentry is receiving events.
 11. FIRST COMMAND TO THE BUILDER
 "Build Phase 1 of LocalLoop following this document. Start with the design system tokens and the Home/Speed Dial + Explore Map screens using seeded Echo Park data, then the storefront page, cart, and pickup checkout. Enable the backend, create the schema with RLS and seed data in a migration, and wire everything to real data. Track progress in roadmap.md."
+
+---
+
+## Running this repository (Base44 sandbox)
+
+Phase 1 is implemented in this repo as a three-service stack. The spec above is the source of
+truth for product scope; this section records the non-obvious operational details so a future
+session does not have to rediscover them.
+
+- **One command:** `docker compose -f docker-compose.base44.yml up -d --build` starts Postgres/PostGIS,
+  applies migrations + seed, then the API (8000), the worker and the web dev server (3000).
+- **Nothing external is required.** Stripe, Twilio, Mapbox and the LLM gateway are each switched on by
+  the presence of their env var; without them the app uses a working local stub (simulated charge,
+  SMS written to `notification_log`, canvas map, text menu parser). Secrets arrive from the platform
+  at `/run/base44/app.env`, which compose loads *after* `.env.base44-defaults` so a real value wins.
+- **Sign in with either:** `neighbor@localloop.dev` (shopper), `gallo@localloop.dev` (owns 4 storefronts),
+  `ops@localloop.dev` (admin). The OTP sign-in sheet shows the code when no SMS provider is configured.
+- **Two database roles, on purpose.** The API connects as `localloop_app` (RLS enforced, `app.user_id`
+  set per request inside a transaction); background jobs and service-only writes use the owner pool.
+  `api/tests/rls.test.ts` asserts the isolation against the running database.
+- **Verify a change:** `docker compose exec api npm test`, `docker compose exec api npx tsc --noEmit`,
+  `docker compose exec web npx tsc --noEmit`. Frontend edits hot-reload; API edits restart via tsx watch.
+- **Resetting data:** `down -v` drops the volume; the seed is idempotent, so a plain re-run is safe.

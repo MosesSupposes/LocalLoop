@@ -1,0 +1,70 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  api:
+    name: API — typecheck, migrations, tests
+    runs-on: ubuntu-latest
+    services:
+      db:
+        image: postgis/postgis:16-3.4
+        env:
+          POSTGRES_USER: localloop
+          POSTGRES_PASSWORD: localloop_dev_pw
+          POSTGRES_DB: localloop
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U localloop -d localloop"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      PGHOST: localhost
+      PGUSER: localloop
+      PGPASSWORD: localloop_dev_pw
+      PGDATABASE: localloop
+      APP_DB_USER: localloop_app
+      APP_DB_PASSWORD: localloop_app_pw
+      DATABASE_URL: postgres://localloop:localloop_dev_pw@localhost:5432/localloop
+      APP_DATABASE_URL: postgres://localloop_app:localloop_app_pw@localhost:5432/localloop
+      SESSION_SECRET: ci-only-session-secret
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Ensure psql
+        run: command -v psql || sudo apt-get update && sudo apt-get install -y postgresql-client
+      - name: Migration dry run (apply + seed)
+        run: sh db/migrate.sh
+      - name: Install
+        working-directory: api
+        run: npm ci --no-audit --no-fund
+      - name: Typecheck
+        working-directory: api
+        run: npm run typecheck
+      - name: Tests (unit + RLS integration)
+        working-directory: api
+        run: npm test
+
+  web:
+    name: Web — typecheck, build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install
+        working-directory: web
+        run: npm ci --no-audit --no-fund
+      - name: Typecheck
+        working-directory: web
+        run: npm run typecheck
+      - name: Build
+        working-directory: web
+        run: npx vite build

@@ -1,0 +1,10 @@
+{
+  "name": "LocalLoop",
+  "short_name": "LocalLoop",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0a1310",
+  "theme_color": "#0a1310",
+  "description": "Your block, on speed dial.",
+  "icons": []
+}
