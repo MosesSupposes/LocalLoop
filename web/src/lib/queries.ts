@@ -149,7 +149,13 @@ export function useClearCart() {
 /* --------------------------------------------------------------- orders */
 
 export function useOrders() {
-  return useQuery({ queryKey: ['orders'], queryFn: () => api.get<{ orders: Order[] }>('/api/orders') })
+  // Keyed by account: the endpoint answers a signed-out request with an empty list, so a
+  // result fetched for one visitor must never be served to the next one who signs in.
+  const userId = useUI((s) => s.user?.id ?? null)
+  return useQuery({
+    queryKey: ['orders', userId],
+    queryFn: () => api.get<{ orders: Order[] }>('/api/orders'),
+  })
 }
 
 export function useOrder(id: string | undefined) {
