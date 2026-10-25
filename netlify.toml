@@ -1,0 +1,15 @@
+[build]
+  command = "npm run build"
+  publish = "dist"
+
+# Add before the SPA fallback once the API has a public URL:
+# [[redirects]]
+#   from = "/api/*"
+#   to = "https://YOUR-API-HOST/api/:splat"
+#   status = 200
+#   force = true
+
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
