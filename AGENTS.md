@@ -190,6 +190,17 @@ session does not have to rediscover them.
   the presence of their env var; without them the app uses a working local stub (simulated charge,
   SMS written to `notification_log`, canvas map, text menu parser). Secrets arrive from the platform
   at `/run/base44/app.env`, which compose loads *after* `.env.base44-defaults` so a real value wins.
+- **Bitcoin checkout is the same trick.** A neighbor can pay for a pickup order with bitcoin
+  (`paymentMethod: 'bitcoin'` on `POST /api/orders`). With `BTCPAY_URL` + `BTCPAY_STORE_ID` +
+  `BTCPAY_API_KEY` set the API opens a real BTCPay Server invoice and only the provider can settle it
+  (via `POST /api/public/btcpay-webhook`, verified with `BTCPAY_WEBHOOK_SECRET`); with none of them the
+  sandbox issues a local invoice whose address is derived from the order id, and
+  `POST /api/orders/:id/bitcoin/confirm` settles it — no bitcoin moves and nothing leaves the sandbox.
+  A bitcoin order stays `unpaid` until then, so the merchant is alerted only once the money is there
+  (`api/src/services/notify.ts#announceNewOrder`) and the worker cancels an order whose invoice has been
+  expired for 30 minutes. `BITCOIN_USD_RATE` (USD per whole BTC) prices invoices; empty uses the
+  built-in reference rate in `api/src/lib/bitcoin.ts`. The pay panel is
+  `web/src/components/BitcoinPayPanel.tsx` on the order screen.
 - **Sign in with either:** `neighbor@localloop.dev` (shopper), `gallo@localloop.dev` (owns 4 storefronts),
   `ops@localloop.dev` (admin). The OTP sign-in sheet shows the code when no SMS provider is configured.
 - **Two database roles, on purpose.** The API connects as `localloop_app` (RLS enforced, `app.user_id`

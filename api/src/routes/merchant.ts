@@ -232,7 +232,7 @@ export async function merchantRoutes(app: FastifyInstance): Promise<void> {
       const orders = await query(
         db,
         `select o.id, o.code, o.status, o.total_cents, o.subtotal_cents, o.tip_cents, o.payment_status,
-                o.note, o.created_at, o.updated_at, o.pickup_eta,
+                o.payment_provider, o.note, o.created_at, o.updated_at, o.pickup_eta,
                 p.display_name as neighbor_name,
                 (select jsonb_agg(jsonb_build_object('name', oi.name_snapshot, 'qty', oi.qty,
                                                      'price_cents', oi.price_snapshot, 'options', oi.options)

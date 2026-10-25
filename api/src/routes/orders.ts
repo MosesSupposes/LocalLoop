@@ -1,14 +1,15 @@
 import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
-import { ownerPool, query, queryOne, withUser } from '../db.js'
+import { query, queryOne, withUser } from '../db.js'
 import { badRequest, conflict, notFound, unauthorized } from '../lib/errors.js'
 import { dealDiscountCents, orderTotals, type FeeConfig } from '../lib/fees.js'
 import { rateLimitOrThrow } from '../lib/rateLimit.js'
 import { trackerState, type OrderStatus } from '../lib/orderState.js'
 import { readSession } from '../lib/session.js'
-import { chargeForOrder, refundPayment } from '../services/payments.js'
-import { insertNotification, sendSms } from '../services/notify.js'
+import { chargeForOrder, refundPayment, type PaymentResult } from '../services/payments.js'
+import { announceNewOrder, insertNotification } from '../services/notify.js'
 import { transitionOrder } from '../services/orderFlow.js'
+import { bitcoinInvoiceFromOrder, createBitcoinInvoice, type BitcoinInvoice } from '../services/bitcoin.js'
 
 const CreateOrder = z.object({
   merchantId: z.string().uuid(),
@@ -16,13 +17,15 @@ const CreateOrder = z.object({
   pickupSlot: z.string().datetime().nullable().optional(),
   tipCents: z.number().int().min(0).max(5000).default(0),
   note: z.string().max(200).nullable().optional(),
-  paymentMethod: z.enum(['card', 'apple_pay', 'google_pay']).default('card'),
+  paymentMethod: z.enum(['card', 'apple_pay', 'google_pay', 'bitcoin']).default('card'),
 })
 
-const ORDER_VIEW = `
+export const ORDER_VIEW = `
   select o.id, o.code, o.status, o.fulfillment, o.subtotal_cents, o.discount_cents,
          o.platform_fee_cents,
          o.service_fee_cents, o.tip_cents, o.total_cents, o.currency, o.payment_status,
+         o.payment_provider, o.payment_reference, o.payment_address, o.payment_amount_sats,
+         o.payment_rate_cents, o.payment_expires_at, o.payment_confirmed_at,
          o.pickup_slot, o.pickup_eta, o.note, o.cancel_reason, o.created_at, o.updated_at,
          m.id as merchant_id, m.name as merchant_name, m.slug as merchant_slug, m.category,
          m.phone as merchant_phone, m.address as merchant_address,
@@ -33,17 +36,29 @@ const ORDER_VIEW = `
   from orders o join merchants m on m.id = o.merchant_id
 `
 
-type OrderView = {
+export type OrderView = {
   id: string
   code: string
   status: OrderStatus
   merchant_name: string
   items: { qty: number; price_cents: number }[]
+  payment_provider?: string | null
+  payment_reference?: string | null
+  payment_address?: string | null
+  payment_amount_sats?: number | string | null
+  payment_rate_cents?: number | null
+  payment_expires_at?: string | Date | null
+  payment_status?: string | null
   [key: string]: unknown
 }
 
-function respond(order: OrderView) {
-  return { ...order, tracker: trackerState(order.status) }
+/** One place that decorates an order row, so every endpoint returns the same shape. */
+export function respond(order: OrderView) {
+  return {
+    ...order,
+    bitcoin: bitcoinInvoiceFromOrder(order),
+    tracker: trackerState(order.status),
+  }
 }
 
 export async function orderRoutes(app: FastifyInstance): Promise<void> {
@@ -169,45 +184,74 @@ export async function orderRoutes(app: FastifyInstance): Promise<void> {
         )
       }
 
-      const payment = await chargeForOrder({
-        orderId,
-        amountCents: totals.totalCents,
-        currency: 'usd',
-        paymentMethod: body.paymentMethod,
-      })
-      await db.query(
-        `update orders set payment_status = $2, stripe_payment_intent = $3 where id = $1`,
-        [orderId, payment.status, payment.intentId],
-      )
+      // Bitcoin settles after the fact: the order stays unpaid until the invoice is paid, and
+      // the merchant is alerted at that point instead of now (routes/bitcoin.ts + webhooks.ts).
+      let invoice: BitcoinInvoice | null = null
+      if (body.paymentMethod === 'bitcoin') {
+        const opened = await createBitcoinInvoice({
+          orderId,
+          code: codeRow!.code,
+          amountCents: totals.totalCents,
+        })
+        await db.query(
+          `update orders set payment_provider = 'bitcoin', payment_reference = $2, payment_address = $3,
+                             payment_amount_sats = $4, payment_rate_cents = $5, payment_expires_at = $6
+           where id = $1`,
+          [
+            orderId,
+            opened.invoiceId,
+            opened.address,
+            opened.amountSats,
+            opened.rateCents,
+            opened.expiresAt,
+          ],
+        )
+        invoice = bitcoinInvoiceFromOrder({
+          payment_provider: 'bitcoin',
+          payment_reference: opened.invoiceId,
+          payment_address: opened.address,
+          payment_amount_sats: opened.amountSats,
+          payment_rate_cents: opened.rateCents,
+          payment_expires_at: opened.expiresAt,
+          payment_status: 'unpaid',
+        })
+      } else {
+        const payment: PaymentResult = await chargeForOrder({
+          orderId,
+          amountCents: totals.totalCents,
+          currency: 'usd',
+          paymentMethod: body.paymentMethod,
+        })
+        await db.query(
+          `update orders set payment_status = $2, stripe_payment_intent = $3, payment_provider = 'stripe' where id = $1`,
+          [orderId, payment.status, payment.intentId],
+        )
+      }
 
       await db.query('delete from carts where id = $1', [cart.id])
 
       const view = await queryOne<OrderView>(db, `${ORDER_VIEW} where o.id = $1`, [orderId])
-      return { order: respond(view!), merchant, totals, discountCents, payment }
+      return { order: respond(view!), merchantId: body.merchantId, totals, discountCents, invoice }
     })
 
     // Alerts fire outside the request transaction: a messaging hiccup must not roll back an order.
-    const merchantPhone = await queryOne<{ phone: string | null }>(
-      ownerPool,
-      'select phone from profiles where id = $1',
-      [created.merchant.owner_id],
-    )
-    const alert = `New LocalLoop pickup order ${created.order.code} for ${created.order.merchant_name}. Open the dashboard to accept.`
-    if (merchantPhone?.phone) {
-      await sendSms({ to: merchantPhone.phone, body: alert, template: 'merchant_new_order' })
+    // A bitcoin order is not paid yet, so only the neighbor hears about it, and the merchant is
+    // alerted by routes/bitcoin.ts once the money is actually there.
+    if (created.invoice) {
+      await insertNotification({
+        userId: session.id,
+        type: 'payment_pending',
+        title: `Order ${created.order.code} is reserved — pay ${created.invoice.amountBtc} BTC to confirm`,
+        payload: { orderId: created.order.id, invoiceId: created.invoice.invoiceId },
+      })
+    } else {
+      await announceNewOrder({
+        orderId: created.order.id,
+        code: created.order.code,
+        merchantId: created.merchantId,
+        neighborId: session.id,
+      })
     }
-    await insertNotification({
-      userId: created.merchant.owner_id,
-      type: 'new_order',
-      title: `New order ${created.order.code}`,
-      payload: { orderId: created.order.id },
-    })
-    await insertNotification({
-      userId: session.id,
-      type: 'order_status',
-      title: `Order ${created.order.code} placed at ${created.order.merchant_name}`,
-      payload: { orderId: created.order.id },
-    })
 
     return { order: created.order, totals: created.totals, discountCents: created.discountCents }
   })

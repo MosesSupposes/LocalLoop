@@ -2,5 +2,26 @@
   "previewPort": 3000,
   "healthPath": "/api/health",
   "startCommand": "docker compose -f docker-compose.base44.yml up -d",
-  "secrets": []
+  "secrets": [
+    {
+      "name": "BTCPAY_URL",
+      "description": "Base URL of your BTCPay Server (e.g. https://pay.example.com). Without it, bitcoin checkout issues sandbox invoices that settle inside this environment only.",
+      "requiredAtBoot": false
+    },
+    {
+      "name": "BTCPAY_STORE_ID",
+      "description": "BTCPay store id whose invoices LocalLoop opens (BTCPay → Stores → your store → Settings).",
+      "requiredAtBoot": false
+    },
+    {
+      "name": "BTCPAY_API_KEY",
+      "description": "BTCPay API key with invoice read/write (BTCPay → Account → API keys).",
+      "requiredAtBoot": false
+    },
+    {
+      "name": "BTCPAY_WEBHOOK_SECRET",
+      "description": "Secret of the BTCPay webhook pointed at /api/public/btcpay-webhook, used to verify settlements.",
+      "requiredAtBoot": false
+    }
+  ]
 }

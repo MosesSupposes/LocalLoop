@@ -25,12 +25,14 @@ tenancy isolation.
 | P1-13 | RLS everywhere + has_role() + RLS tests | ✅ | integration tests in `api/tests/rls.test.ts` |
 | P1-14 | Webhooks (signed, idempotent) + scheduled jobs | ✅ | worker service |
 | P1-15 | CI (lint → typecheck → tests → build, migration dry run) | ✅ | `.github/workflows/ci.yml` |
-
+| P1-16 | Bitcoin checkout | ✅ | per-order bitcoin invoice (BTCPay Server when configured, local sandbox invoice otherwise), pay panel on the order screen, signed+idempotent settlement webhook, expired invoices released by the worker |
 ## Phase 1 follow-ups (deliberately out of scope here)
 
 - Service worker + offline speed dial (manifest ships, caching does not).
 - Real Mapbox GL neon style (token is read from `MAPBOX_TOKEN`; canvas map is the fallback).
 - Stripe Connect live payouts and Apple/Google Pay wallets (Payment Element is stubbed).
+- Bitcoin refunds and partial payments are manual: a settled invoice is marked `refunded` on cancel
+  but no on-chain refund is broadcast.
 - Photo menu import needs `AI_API_KEY`; text import works today.
 - Per-item promotion rules so `bogo` deals apply automatically.
 

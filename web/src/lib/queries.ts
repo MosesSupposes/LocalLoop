@@ -168,6 +168,8 @@ export function useOrder(id: string | undefined) {
   })
 }
 
+export type PaymentMethod = 'card' | 'apple_pay' | 'google_pay' | 'bitcoin'
+
 export function usePlaceOrder() {
   const queryClient = useQueryClient()
   return useMutation({
@@ -176,11 +178,28 @@ export function usePlaceOrder() {
       pickupSlot: string | null
       tipCents: number
       note?: string
-      paymentMethod: 'card' | 'apple_pay' | 'google_pay'
+      paymentMethod: PaymentMethod
     }) => api.post<{ order: Order }>('/api/orders', { ...body, fulfillment: 'pickup' }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['orders'] })
       queryClient.invalidateQueries({ queryKey: ['cart'] })
+      queryClient.invalidateQueries({ queryKey: ['session'] })
+    },
+  })
+}
+
+/**
+ * Asks the payment provider whether a bitcoin invoice has settled. With a BTCPay store the
+ * answer is the provider's; with none the sandbox invoice settles locally.
+ */
+export function useConfirmBitcoinPayment() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (orderId: string) =>
+      api.post<{ order: Order; settled: boolean }>(`/api/orders/${orderId}/bitcoin/confirm`, {}),
+    onSuccess: (data, orderId) => {
+      queryClient.setQueryData(['order', orderId], data)
+      queryClient.invalidateQueries({ queryKey: ['orders'] })
       queryClient.invalidateQueries({ queryKey: ['session'] })
     },
   })

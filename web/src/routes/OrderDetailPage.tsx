@@ -5,6 +5,7 @@ import { dayLabel, money, timeOfDay } from '../lib/format'
 import { useCancelOrder, useOrder, useReviewOrder } from '../lib/queries'
 import { errorMessage } from '../lib/api'
 import { OrderTracker } from '../components/OrderTracker'
+import { BitcoinPayPanel } from '../components/BitcoinPayPanel'
 import { Banner, Button, Card, ErrorState, Pill, Skeleton } from '../components/ui'
 
 export function OrderDetailPage() {
@@ -24,6 +25,7 @@ export function OrderDetailPage() {
   const record = order.data.order
   const canCancel = ['placed', 'accepted'].includes(record.status)
   const canReview = ['picked_up', 'delivered'].includes(record.status)
+  const bitcoinDue = Boolean(record.bitcoin) && record.payment_status === 'unpaid' && !record.tracker.cancelled
 
   return (
     <div className="mx-auto max-w-2xl space-y-5">
@@ -49,6 +51,8 @@ export function OrderDetailPage() {
           </p>
         ) : null}
       </Card>
+
+      {bitcoinDue ? <BitcoinPayPanel order={record} /> : null}
 
       <Card className="space-y-2">
         {record.items.map((line, index) => (
@@ -83,7 +87,8 @@ export function OrderDetailPage() {
             <span className="font-mono">{money(record.total_cents)}</span>
           </div>
           <p className="text-xs text-muted">
-            {record.payment_status === 'paid' ? '✓ paid' : record.payment_status} · {record.fulfillment}
+            {record.payment_status === 'paid' ? `✓ ${t('orders.paid')}` : t('orders.unpaid')} ·{' '}
+            {record.payment_provider === 'bitcoin' ? t('cart.bitcoin') : t('cart.card')} · {record.fulfillment}
           </p>
         </div>
       </Card>

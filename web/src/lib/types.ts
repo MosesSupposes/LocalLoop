@@ -8,7 +8,7 @@ export type FeedConfig = {
   categories: Category[]
   currency: string
   fees: { platformFeeBps: number; serviceFeeCents: number }
-  integrations: { payments: string; sms: string; ai: string }
+  integrations: { payments: string; bitcoin: string; sms: string; ai: string }
   center: { lat: number; lng: number }
 }
 
@@ -163,6 +163,22 @@ export type Cart = {
   itemCount: number
 }
 
+/** The bitcoin invoice attached to an order paid with bitcoin. Null for card orders. */
+export type BitcoinInvoiceView = {
+  provider: 'btcpay' | 'simulated'
+  invoiceId: string
+  address: string | null
+  amountSats: number
+  amountBtc: string
+  rateCents: number
+  expiresAt: string
+  uri: string | null
+  checkoutUrl: string | null
+  paid: boolean
+  expired: boolean
+  simulated: boolean
+}
+
 export type OrderStatus =
   | 'placed'
   | 'accepted'
@@ -185,6 +201,9 @@ export type Order = {
   tip_cents?: number
   total_cents: number
   payment_status: string
+  payment_provider?: string | null
+  payment_confirmed_at?: string | null
+  bitcoin?: BitcoinInvoiceView | null
   created_at: string
   updated_at?: string
   pickup_eta: string | null
@@ -243,6 +262,7 @@ export type MerchantOrder = {
   subtotal_cents: number
   tip_cents: number
   payment_status: string
+  payment_provider?: string | null
   note: string | null
   created_at: string
   updated_at: string

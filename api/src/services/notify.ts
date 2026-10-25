@@ -70,6 +70,44 @@ export async function insertNotification(input: {
   )
 }
 
+/**
+ * The alert a newly payable order produces: the merchant gets an SMS (or a logged message)
+ * plus an in-app nudge, the neighbor gets a receipt. Owner pool on purpose — the merchant's
+ * dashboard must react to an order placed by someone else's account.
+ */
+export async function announceNewOrder(input: {
+  orderId: string
+  code: string
+  merchantId: string
+  neighborId: string
+}): Promise<void> {
+  const res = await ownerPool.query<{ name: string; owner_id: string; phone: string | null }>(
+    `select m.name, m.owner_id, p.phone
+     from merchants m left join profiles p on p.id = m.owner_id
+     where m.id = $1`,
+    [input.merchantId],
+  )
+  const merchant = res.rows[0]
+  if (!merchant) return
+
+  const alert = `New LocalLoop pickup order ${input.code} for ${merchant.name}. Open the dashboard to accept.`
+  if (merchant.phone) {
+    await sendSms({ to: merchant.phone, body: alert, template: 'merchant_new_order', orderId: input.orderId })
+  }
+  await insertNotification({
+    userId: merchant.owner_id,
+    type: 'new_order',
+    title: `New order ${input.code}`,
+    payload: { orderId: input.orderId },
+  })
+  await insertNotification({
+    userId: input.neighborId,
+    type: 'order_status',
+    title: `Order ${input.code} placed at ${merchant.name}`,
+    payload: { orderId: input.orderId },
+  })
+}
+
 /** Loyalty accrual is a service-side write triggered by a merchant action. */
 export async function awardLoopPoints(input: {
   userId: string

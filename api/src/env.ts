@@ -15,6 +15,13 @@ export const env = {
   twilioAccountSid: process.env.TWILIO_ACCOUNT_SID ?? '',
   twilioAuthToken: process.env.TWILIO_AUTH_TOKEN ?? '',
   twilioFromNumber: process.env.TWILIO_FROM_NUMBER ?? '',
+  // Bitcoin checkout: a BTCPay Server store. Without it the sandbox issues local invoices.
+  btcpayUrl: process.env.BTCPAY_URL ?? '',
+  btcpayStoreId: process.env.BTCPAY_STORE_ID ?? '',
+  btcpayApiKey: process.env.BTCPAY_API_KEY ?? '',
+  btcpayWebhookSecret: process.env.BTCPAY_WEBHOOK_SECRET ?? '',
+  // USD per whole BTC, used to price invoices when no provider quotes a rate for us.
+  bitcoinUsdRate: Number(process.env.BITCOIN_USD_RATE ?? 0),
   aiApiKey: process.env.AI_API_KEY ?? '',
   aiBaseUrl: process.env.AI_BASE_URL ?? 'https://api.openai.com/v1',
   aiModel: process.env.AI_MODEL ?? 'gpt-4o-mini',
@@ -23,6 +30,8 @@ export const env = {
 export const features = {
   /** Real Stripe PaymentIntents + webhook verification. */
   stripe: Boolean(env.stripeSecretKey),
+  /** Real BTCPay Server invoices + settlement webhook verification. */
+  bitcoin: Boolean(env.btcpayUrl && env.btcpayStoreId && env.btcpayApiKey),
   /** Real SMS via Twilio. */
   sms: Boolean(env.twilioAccountSid && env.twilioAuthToken && env.twilioFromNumber),
   /** LLM menu import from a photo. Without a key we fall back to text parsing. */
@@ -32,6 +41,7 @@ export const features = {
 export function featureSummary() {
   return {
     stripe: features.stripe ? 'live_keys' : 'simulated',
+    bitcoin: features.bitcoin ? 'btcpay' : 'simulated',
     sms: features.sms ? 'twilio' : 'logged',
     ai: features.ai ? 'llm' : 'text_parser',
   }

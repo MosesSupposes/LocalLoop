@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useI18n } from '../lib/i18n'
 import { money, nextPickupSlots, timeOfDay } from '../lib/format'
-import { useCart, useConfig, usePlaceOrder, useSession } from '../lib/queries'
+import { useCart, useConfig, usePlaceOrder, useSession, type PaymentMethod } from '../lib/queries'
 import { errorMessage } from '../lib/api'
 import { Banner, Button, Card, EmptyState, ErrorState, Pill, SectionHeader, Skeleton, cx } from '../components/ui'
 
@@ -20,7 +20,7 @@ export function CheckoutPage() {
   const [slot, setSlot] = useState<string>('asap')
   const [tip, setTip] = useState(200)
   const [note, setNote] = useState('')
-  const [method, setMethod] = useState<'card' | 'apple_pay' | 'google_pay'>('card')
+  const [method, setMethod] = useState<PaymentMethod>('card')
 
   const slots = nextPickupSlots()
   const entry = (cart.data?.carts ?? []).find((candidate) => candidate.merchant_id === merchantId)
@@ -152,7 +152,7 @@ export function CheckoutPage() {
       <section>
         <SectionHeader title={t('cart.payWith')} />
         <div className="flex flex-wrap gap-2">
-          {(['card', 'apple_pay'] as const).map((option) => (
+          {(['card', 'apple_pay', 'bitcoin'] as const).map((option) => (
             <button
               key={option}
               type="button"
@@ -162,15 +162,26 @@ export function CheckoutPage() {
                 method === option ? 'border-primary bg-primary/15 text-primary' : 'border-line bg-surface text-muted',
               )}
             >
-              {option === 'card' ? t('cart.card') : t('cart.wallet')}
+              {option === 'card' ? t('cart.card') : option === 'apple_pay' ? t('cart.wallet') : `₿ ${t('cart.bitcoin')}`}
             </button>
           ))}
         </div>
-        <div className="mt-2">
-          <Pill tone="sky">
-            {config.data?.integrations.payments === 'stripe' ? 'Stripe' : t('cart.simulated')}
-          </Pill>
-        </div>
+        {method === 'bitcoin' ? (
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <Pill tone="sunset">
+              ₿ {config.data?.integrations.bitcoin === 'btcpay' ? 'BTCPay Server' : t('cart.bitcoinSandbox')}
+            </Pill>
+            <span className="text-xs text-muted">
+              {config.data?.integrations.bitcoin === 'btcpay' ? t('cart.bitcoinLive') : t('bitcoin.sendExactly')}
+            </span>
+          </div>
+        ) : (
+          <div className="mt-2">
+            <Pill tone="sky">
+              {config.data?.integrations.payments === 'stripe' ? 'Stripe' : t('cart.simulated')}
+            </Pill>
+          </div>
+        )}
       </section>
 
       <Card className="space-y-1.5">

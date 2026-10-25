@@ -4,6 +4,9 @@ import { ownerPool, query, queryOne, withUser } from '../db.js'
 import { env, features } from '../env.js'
 import { badRequest } from '../lib/errors.js'
 import { verifyStripeSignature } from '../services/payments.js'
+import { markBitcoinInvoicePaid } from '../services/bitcoin.js'
+import { announceNewOrder } from '../services/notify.js'
+import { verifyBtcPaySignature } from '../lib/bitcoin.js'
 import { parseMenuText, importMenuFromImage } from '../services/menuImport.js'
 
 const importBody = (req: FastifyRequest): { text: string } =>
@@ -60,6 +63,50 @@ export async function webhookRoutes(app: FastifyInstance): Promise<void> {
          where stripe_payment_intent = $1`,
         [intentId],
       )
+    }
+    return { received: true }
+  })
+
+  /**
+   * BTCPay Server: a bitcoin invoice settled, so its order is paid and the merchant is told.
+   * Signed with BTCPAY-SIG and idempotent on the delivery id, exactly like the Stripe hook.
+   */
+  app.post('/api/public/btcpay-webhook', async (req, reply) => {
+    const raw = (req as FastifyRequest & { rawBody?: string }).rawBody ?? JSON.stringify(req.body ?? {})
+    if (
+      env.btcpayWebhookSecret &&
+      !verifyBtcPaySignature(raw, req.headers['btcpay-sig'] as string | undefined, env.btcpayWebhookSecret)
+    ) {
+      return reply.code(400).send({ error: 'invalid signature' })
+    }
+
+    const event = (req.body ?? {}) as {
+      deliveryId?: string
+      webhookId?: string
+      type?: string
+      invoiceId?: string
+    }
+    const eventId = event.deliveryId ?? event.webhookId
+    if (!eventId || !event.type || !event.invoiceId) throw badRequest('Malformed event')
+
+    const inserted = await queryOne<{ id: string }>(
+      ownerPool,
+      `insert into webhook_events (id, source, payload) values ($1, 'btcpay', $2::jsonb)
+       on conflict (id) do nothing returning id`,
+      [eventId, raw],
+    )
+    if (!inserted) return { received: true, duplicate: true }
+
+    if (event.type === 'InvoiceSettled' || event.type === 'InvoicePaymentSettled') {
+      const paidOrder = await markBitcoinInvoicePaid(event.invoiceId)
+      if (paidOrder) {
+        await announceNewOrder({
+          orderId: paidOrder.id,
+          code: paidOrder.code,
+          merchantId: paidOrder.merchant_id,
+          neighborId: paidOrder.user_id,
+        })
+      }
     }
     return { received: true }
   })

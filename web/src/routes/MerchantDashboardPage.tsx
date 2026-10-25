@@ -283,6 +283,12 @@ export function MerchantDashboardPage() {
 
               {order.note ? <Banner tone="muted">{order.note}</Banner> : null}
 
+              {order.payment_provider === 'bitcoin' && order.payment_status !== 'paid' ? (
+                <div>
+                  <Pill tone="sunset">₿ {t('merchant.awaitingBitcoin')}</Pill>
+                </div>
+              ) : null}
+
               <div className="flex flex-wrap gap-2">
                 {order.status === 'placed' ? (
                   <Button size="lg" variant="primary" onClick={() => action.mutate({ orderId: order.id, action: 'accept' })}>

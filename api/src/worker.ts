@@ -28,7 +28,8 @@ async function nudgeStaleOrders(): Promise<void> {
   const stale = await ownerPool.query<{ id: string; code: string; owner_id: string }>(
     `select o.id, o.code, m.owner_id
      from orders o join merchants m on m.id = o.merchant_id
-     where o.status = 'placed' and o.created_at < now() - interval '10 minutes'
+     where o.status = 'placed' and o.payment_status = 'paid'
+       and o.created_at < now() - interval '10 minutes'
        and not exists (
          select 1 from notifications n
          where n.payload->>'orderId' = o.id::text and n.type = 'order_nudge'
@@ -41,6 +42,28 @@ async function nudgeStaleOrders(): Promise<void> {
       title: `Order ${order.code} is still waiting for a tap`,
       payload: { orderId: order.id },
     })
+  }
+}
+
+/**
+ * An unpaid bitcoin order holds the stock it reserved, so once its invoice has been dead
+ * for a while the order is released and the neighbor is told.
+ */
+async function expireUnpaidBitcoinOrders(): Promise<void> {
+  const expired = await ownerPool.query<{ id: string; code: string; user_id: string }>(
+    `update orders set status = 'cancelled', cancel_reason = 'bitcoin invoice expired'
+     where payment_provider = 'bitcoin' and payment_status = 'unpaid' and status = 'placed'
+       and payment_expires_at < now() - interval '30 minutes'
+     returning id, code, user_id`,
+  )
+  for (const order of expired.rows) {
+    await insertNotification({
+      userId: order.user_id,
+      type: 'order_status',
+      title: `Order ${order.code} was cancelled — the bitcoin invoice expired`,
+      payload: { orderId: order.id },
+    })
+    console.log(`[worker] released unpaid bitcoin order ${order.code}`)
   }
 }
 
@@ -92,6 +115,7 @@ async function tick(): Promise<void> {
   try {
     await pushNewDrops()
     await nudgeStaleOrders()
+    await expireUnpaidBitcoinOrders()
     await nightlyReconciliation()
   } catch (error) {
     console.error('[worker] tick failed', error)

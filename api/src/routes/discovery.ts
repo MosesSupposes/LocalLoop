@@ -49,6 +49,7 @@ export async function discoveryRoutes(app: FastifyInstance): Promise<void> {
       },
       integrations: {
         payments: features.stripe ? 'stripe' : 'simulated',
+        bitcoin: features.bitcoin ? 'btcpay' : 'simulated',
         sms: features.sms ? 'twilio' : 'logged',
         ai: features.ai ? 'llm' : 'text_parser',
       },

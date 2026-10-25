@@ -9,6 +9,7 @@ import { discoveryRoutes } from './routes/discovery.js'
 import { favoriteRoutes } from './routes/favorites.js'
 import { cartRoutes } from './routes/cart.js'
 import { orderRoutes } from './routes/orders.js'
+import { bitcoinRoutes } from './routes/bitcoin.js'
 import { merchantRoutes } from './routes/merchant.js'
 import { adminRoutes } from './routes/admin.js'
 import { menuImportRoutes, webhookRoutes } from './routes/webhooks.js'
@@ -77,10 +78,10 @@ app.get('/docs', async (_req, reply) => {
     ['Auth', ['POST /api/auth/otp', 'POST /api/auth/otp/verify', 'POST /api/auth/logout', 'GET /api/me', 'PATCH /api/me', 'GET /api/me/loop-points', 'GET /api/me/notifications']],
     ['Discover', ['GET /api/config', 'GET /api/home', 'GET /api/neighborhoods', 'GET /api/merchants/nearby', 'GET /api/merchants/:slug', 'GET /api/drops/live', 'GET /api/search?q=']],
     ['Speed dial', ['GET /api/cart', 'POST /api/cart/items', 'PATCH /api/cart/items/:id', 'DELETE /api/cart/items/:id', 'PUT /api/favorites/:merchantId', 'DELETE /api/favorites/:merchantId']],
-    ['Order', ['POST /api/orders', 'GET /api/orders', 'GET /api/orders/:id', 'POST /api/orders/:id/cancel', 'POST /api/orders/:id/reorder', 'POST /api/orders/:id/review']],
+    ['Order', ['POST /api/orders', 'GET /api/orders', 'GET /api/orders/:id', 'POST /api/orders/:id/cancel', 'POST /api/orders/:id/reorder', 'POST /api/orders/:id/review', 'POST /api/orders/:id/bitcoin/confirm']],
     ['Merchant', ['GET /api/merchant/context', 'POST /api/merchant', 'GET /api/merchant/:id/orders', 'POST /api/merchant/:id/orders/:orderId/:action', 'GET/PATCH /api/merchant/:id', 'GET /api/merchant/:id/menu', 'POST /api/merchant/:id/items', 'POST /api/merchant/:id/drops', 'POST /api/merchant/:id/deals', 'GET /api/merchant/:id/analytics', 'GET /api/merchant/:id/payouts', 'POST /api/merchant/:id/stripe-connect']],
     ['Neighborhood ops', ['GET /api/admin/overview', 'GET /api/admin/merchants', 'POST /api/admin/merchants/:id/status', 'POST /api/admin/merchants/:id/featured', 'GET/POST /api/admin/neighborhoods', 'POST /api/admin/orders/:id/refund', 'GET /api/admin/audit']],
-    ['Webhooks & tools', ['POST /api/public/stripe-webhook', 'POST /api/public/twilio-inbound', 'POST /api/menu-import', 'POST /api/menu-import/photo']],
+    ['Webhooks & tools', ['POST /api/public/stripe-webhook', 'POST /api/public/twilio-inbound', 'POST /api/public/btcpay-webhook', 'POST /api/menu-import', 'POST /api/menu-import/photo']],
   ]
   const html = `<!doctype html><html lang="en"><head><meta charset="utf-8">
 <title>LocalLoop API</title>
@@ -98,6 +99,7 @@ await app.register(discoveryRoutes)
 await app.register(favoriteRoutes)
 await app.register(cartRoutes)
 await app.register(orderRoutes)
+await app.register(bitcoinRoutes)
 await app.register(merchantRoutes)
 await app.register(adminRoutes)
 await app.register(webhookRoutes)
